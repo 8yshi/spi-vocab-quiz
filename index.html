@@ -1,0 +1,186 @@
+
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>SPI語彙クイズ</title>
+  <style>
+    body {
+      font-family: 'Noto Sans JP', 'メイリオ', sans-serif;
+      background: #1a3d1a;
+      color: #fff;
+      margin: 0;
+      padding: 20px;
+    }
+    .container {
+      max-width: 600px;
+      margin: 0 auto;
+      background: #ffffff;
+      color: #000;
+      padding: 20px;
+      border-radius: 10px;
+    }
+    .choices button, #nextButton {
+      display: block;
+      width: 100%;
+      margin: 10px 0;
+      padding: 14px;
+      font-size: 16px;
+      font-weight: bold;
+      background-color: #e0f2e0;
+      border: none;
+      border-radius: 28px;
+      cursor: pointer;
+    }
+    .choices button:hover, #nextButton:hover {
+      background-color: #a5d6a7;
+    }
+    .sun-message {
+      display: flex;
+      align-items: flex-start;
+      margin-top: 20px;
+    }
+    .sun-icon img {
+      width: 60px;
+      height: auto;
+      margin-right: 10px;
+    }
+    .speech-bubble {
+      background: #ffffff;
+      border-radius: 10px;
+      padding: 10px 15px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+      position: relative;
+      max-width: 100%;
+      color: #333;
+    }
+    .speech-bubble::after {
+      content: "";
+      position: absolute;
+      top: 20px;
+      left: -10px;
+      border: 10px solid transparent;
+      border-right-color: #ffffff;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>SPI語彙クイズ</h1>
+    <label for="numQuestions">問題数：</label>
+    <select id="numQuestions">
+      <option value="10">10問</option>
+      <option value="20">20問</option>
+    </select>
+    <button onclick="startQuiz()">クイズ開始</button>
+    <div id="quiz" class="question"></div>
+    <div id="choices" class="choices"></div>
+    <div id="result" class="result"></div>
+    <button id="nextButton" onclick="nextQuestion()" style="display:none;">次の問題へ</button>
+    <div id="summary" class="summary"></div>
+  </div>
+
+  <script>
+    let vocabList = [];
+    let currentQuestion = 0;
+    let score = 0;
+    let questions = [];
+    let wrongAnswers = [];
+
+    async function loadCSV() {
+      const response = await fetch("vocab.csv");
+      const data = await response.text();
+      const lines = data.trim().split("\n");
+      vocabList = lines.slice(1).map(line => {
+        const [word, meaning] = line.split(",");
+        return { word: word.trim(), meaning: meaning.trim() };
+      });
+    }
+
+    function getSpeech(isCorrect) {
+      const correctPhrases = [
+        "お主、やるのぉ〜！", "ようやったのう、立派じゃ", "正解じゃ！さすがじゃな"
+      ];
+      const wrongPhrases = [
+        "まだまだじゃのう……", "今のはサービス問題じゃったのにのう〜", "それじゃSPI受からんぞ〜？本気出せや〜"
+      ];
+      const list = isCorrect ? correctPhrases : wrongPhrases;
+      return list[Math.floor(Math.random() * list.length)];
+    }
+
+    function startQuiz() {
+      document.getElementById("result").innerHTML = "";
+      document.getElementById("summary").innerHTML = "";
+      document.getElementById("nextButton").style.display = "none";
+      const num = parseInt(document.getElementById("numQuestions").value);
+      currentQuestion = 0;
+      score = 0;
+      wrongAnswers = [];
+      questions = generateQuestions(num);
+      showQuestion();
+    }
+
+    function generateQuestions(n) {
+      const shuffled = [...vocabList].sort(() => Math.random() - 0.5);
+      return shuffled.slice(0, n).map(q => {
+        const correct = q;
+        const otherChoices = vocabList.filter(v => v.word !== correct.word).sort(() => Math.random() - 0.5).slice(0, 4);
+        const allChoices = [...otherChoices, correct].sort(() => Math.random() - 0.5);
+        return { meaning: correct.meaning, correct: correct, choices: allChoices };
+      });
+    }
+
+    function showQuestion() {
+      if (currentQuestion >= questions.length) {
+        showResults();
+        return;
+      }
+      const q = questions[currentQuestion];
+      document.getElementById("quiz").innerHTML = `<strong>Q${currentQuestion + 1}:</strong> ${q.meaning}`;
+      const choicesDiv = document.getElementById("choices");
+      choicesDiv.innerHTML = "";
+      document.getElementById("result").innerHTML = "";
+      document.getElementById("nextButton").style.display = "none";
+      q.choices.forEach((choice) => {
+        const btn = document.createElement("button");
+        btn.textContent = choice.word;
+        btn.onclick = () => {
+          const isCorrect = (choice.word === q.correct.word);
+          const message = getSpeech(isCorrect);
+          const imagePath = isCorrect ? "img/ojisan_correct.png" : "img/ojisan_wrong.png";
+          let html = `<div class='sun-message'><div class='sun-icon'><img src='${imagePath}'></div><div class='speech-bubble'>`;
+          html += `${message}<br><ul>` + q.choices.map(c => `<li><strong>${c.word}</strong>: ${c.meaning}</li>`).join('') + `</ul>`;
+          html += `</div></div>`;
+          document.getElementById("result").innerHTML = html;
+          document.getElementById("nextButton").style.display = "block";
+          if (!isCorrect) wrongAnswers.push(q); else score++;
+        };
+        choicesDiv.appendChild(btn);
+      });
+    }
+
+    function nextQuestion() {
+      currentQuestion++;
+      showQuestion();
+    }
+
+    function showResults() {
+      document.getElementById("quiz").innerHTML = `クイズ終了！正答数：${score} / ${questions.length}`;
+      document.getElementById("choices").innerHTML = "";
+      document.getElementById("nextButton").style.display = "none";
+      let summaryHtml = "";
+      if (wrongAnswers.length > 0) {
+        summaryHtml += "<h3>間違えた問題：</h3><ul>";
+        summaryHtml += wrongAnswers.map(w => `<li><strong>${w.correct.word}</strong>: ${w.correct.meaning}</li>`).join('');
+        summaryHtml += "</ul>";
+      } else {
+        summaryHtml += "<p>全問正解！おめでとうございます！</p>";
+      }
+      document.getElementById("summary").innerHTML = summaryHtml;
+    }
+
+    window.onload = loadCSV;
+  </script>
+</body>
+</html>
